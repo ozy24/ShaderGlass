@@ -16,6 +16,13 @@ GNU General Public License v3.0
 
 #define TIMER_TITLE 0
 
+static const std::map<UINT, int> maxFPSValues = {{ID_FPS_MAXFPS_UNLIMITED, 0},
+                                                 {ID_FPS_MAXFPS_60, 60},
+                                                 {ID_FPS_MAXFPS_45, 45},
+                                                 {ID_FPS_MAXFPS_30, 30},
+                                                 {ID_FPS_MAXFPS_20, 20},
+                                                 {ID_FPS_MAXFPS_15, 15}};
+
 ShaderWindow::ShaderWindow(CaptureManager& captureManager) :
     m_captureManager(captureManager), m_captureOptions(captureManager.m_options), m_title(), m_windowClass(), m_toggledNone(false)
 { }
@@ -900,6 +907,17 @@ void ShaderWindow::BuildProgramMenu()
     {
         AppendMenu(m_frameSkipMenu, MF_STRING, fs.first, fs.second.text);
     }
+    AppendMenu(m_frameSkipMenu, MF_SEPARATOR, 0, nullptr);
+    m_maxFPSMenu = CreatePopupMenu();
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_UNLIMITED, L"Unlimited");
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_60, L"60");
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_45, L"45");
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_30, L"30");
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_20, L"20");
+    AppendMenu(m_maxFPSMenu, MF_STRING, ID_FPS_MAXFPS_15, L"15");
+    AppendMenu(m_frameSkipMenu, MF_POPUP, (UINT_PTR)m_maxFPSMenu, L"Max FPS");
+    AppendMenu(m_frameSkipMenu, MF_STRING, ID_FPS_VSYNC, L"VSync");
+    AppendMenu(m_frameSkipMenu, MF_STRING, ID_FPS_LIMITCAPTURERATE, L"Limit Capture Rate (follows Max FPS)");
 
     m_recentMenu = CreatePopupMenu();
     InsertMenu(m_programMenu, 15, MF_BYPOSITION | MF_STRING | MF_POPUP, (UINT_PTR)m_recentMenu, L"Recent profiles");
@@ -1615,6 +1633,45 @@ LRESULT CALLBACK ShaderWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, L
             break;
         case IDM_TRAY_SHOWHIDE:
             ToggleWindowVisibility(!IsWindowVisible(m_mainWindow));
+            break;
+        case ID_FPS_MAXFPS_UNLIMITED:
+        case ID_FPS_MAXFPS_60:
+        case ID_FPS_MAXFPS_45:
+        case ID_FPS_MAXFPS_30:
+        case ID_FPS_MAXFPS_20:
+        case ID_FPS_MAXFPS_15:
+            m_captureOptions.maxFPS = maxFPSValues.at(wmId);
+            m_captureManager.UpdateMaxFPS();
+            CheckMenuRadioItem(m_maxFPSMenu, ID_FPS_MAXFPS_UNLIMITED, ID_FPS_MAXFPS_15, wmId, MF_BYCOMMAND);
+            SaveRegistryInt(TEXT("Max FPS"), m_captureOptions.maxFPS);
+            break;
+        case ID_FPS_VSYNC:
+            if(GetMenuState(m_frameSkipMenu, ID_FPS_VSYNC, MF_BYCOMMAND) & MF_CHECKED)
+            {
+                CheckMenuItem(m_frameSkipMenu, ID_FPS_VSYNC, MF_UNCHECKED);
+                m_captureOptions.vsync = false;
+            }
+            else
+            {
+                CheckMenuItem(m_frameSkipMenu, ID_FPS_VSYNC, MF_CHECKED);
+                m_captureOptions.vsync = true;
+            }
+            SaveRegistryOption(TEXT("VSync"), m_captureOptions.vsync);
+            m_captureManager.UpdateVSync();
+            break;
+        case ID_FPS_LIMITCAPTURERATE:
+            if(GetMenuState(m_frameSkipMenu, ID_FPS_LIMITCAPTURERATE, MF_BYCOMMAND) & MF_CHECKED)
+            {
+                CheckMenuItem(m_frameSkipMenu, ID_FPS_LIMITCAPTURERATE, MF_UNCHECKED);
+                m_captureOptions.limitCaptureRate = false;
+            }
+            else
+            {
+                CheckMenuItem(m_frameSkipMenu, ID_FPS_LIMITCAPTURERATE, MF_CHECKED);
+                m_captureOptions.limitCaptureRate = true;
+            }
+            SaveRegistryOption(TEXT("Limit Capture Rate"), m_captureOptions.limitCaptureRate);
+            m_captureManager.UpdateCaptureRate();
             break;
         case ID_PRESENTATION_USEFLIPMODE:
             if(GetMenuState(m_advancedMenu, ID_PRESENTATION_USEFLIPMODE, MF_BYCOMMAND) & MF_CHECKED)
@@ -2668,11 +2725,34 @@ bool ShaderWindow::Create(_In_ HINSTANCE hInstance, _In_ int nCmdShow)
             CheckMenuItem(m_advancedMenu, ID_ADVANCED_MAXCAPTUREFRAMERATE, MF_BYCOMMAND | MF_CHECKED);
             m_captureOptions.maxCaptureRate = true;
         }
+        if(GetRegistryOption(TEXT("Limit Capture Rate"), false))
+        {
+            m_captureOptions.limitCaptureRate = true;
+            CheckMenuItem(m_frameSkipMenu, ID_FPS_LIMITCAPTURERATE, MF_BYCOMMAND | MF_CHECKED);
+        }
     }
     else
     {
         ModifyMenu(
             m_advancedMenu, ID_ADVANCED_MAXCAPTUREFRAMERATE, MF_BYCOMMAND | MF_STRING | MF_DISABLED | MF_GRAYED, ID_ADVANCED_MAXCAPTUREFRAMERATE, L"Max Capture Rate (Win11 24H2)");
+        ModifyMenu(
+            m_frameSkipMenu, ID_FPS_LIMITCAPTURERATE, MF_BYCOMMAND | MF_STRING | MF_DISABLED | MF_GRAYED, ID_FPS_LIMITCAPTURERATE, L"Limit Capture Rate (Win11 24H2)");
+    }
+
+    m_captureOptions.maxFPS = GetRegistryInt(TEXT("Max FPS"), 0);
+    {
+        UINT maxFpsId = ID_FPS_MAXFPS_UNLIMITED;
+        for(const auto& mf : maxFPSValues)
+        {
+            if(mf.second == m_captureOptions.maxFPS)
+                maxFpsId = mf.first;
+        }
+        CheckMenuRadioItem(m_maxFPSMenu, ID_FPS_MAXFPS_UNLIMITED, ID_FPS_MAXFPS_15, maxFpsId, MF_BYCOMMAND);
+    }
+    if(GetRegistryOption(TEXT("VSync"), false))
+    {
+        m_captureOptions.vsync = true;
+        CheckMenuItem(m_frameSkipMenu, ID_FPS_VSYNC, MF_BYCOMMAND | MF_CHECKED);
     }
 
     m_captureOptions.monitor      = nullptr;

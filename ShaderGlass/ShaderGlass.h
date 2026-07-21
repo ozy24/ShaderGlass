@@ -35,6 +35,8 @@ public:
     void  SetOutputFlip(bool h, bool v);
     void  SetShaderPreset(PresetDef* p, const std::vector<std::tuple<int, std::string, double>>& params);
     void  SetFrameSkip(int s);
+    void  SetMaxFPS(int fps);
+    void  SetVSync(bool vsync);
     void  SetLockedArea(RECT area);
     void  SetCroppedArea(RECT area);
     void  SetFreeScale(bool freeScale);
@@ -100,6 +102,7 @@ private:
     ULONGLONG  m_prevFrameTicks {0};
     int        m_prevInputFrameNo {0};
     int        m_prevLogicalFrameNo {0};
+    int        m_prevMaxFpsFrameNo {0};
     float      m_fps {0};
     bool       m_requiresFeedback {false};
     int        m_requiresHistory {0};
@@ -119,6 +122,8 @@ private:
     std::vector<std::tuple<int, std::string, double>> m_newParams;
 
     volatile int   m_frameSkip {0};
+    volatile int   m_maxFPS {0};
+    volatile bool  m_vsync {false};
     volatile bool  m_running {false};
     volatile float m_inputScaleW {3.0f};
     volatile float m_inputScaleH {3.0f};

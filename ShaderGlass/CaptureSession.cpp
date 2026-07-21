@@ -99,6 +99,32 @@ void CaptureSession::Reset()
     m_prevTicks       = GetTickCount64();
 }
 
+void CaptureSession::UpdateCaptureRate(bool maxCaptureRate, int limitFPS)
+{
+    if(!HasCaptureAPI() || !m_session || !CanSetCaptureRate())
+        return;
+    try
+    {
+        if(limitFPS > 0)
+        {
+            // user-requested capture cap, aligned with Max FPS
+            m_session.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan(std::chrono::milliseconds(1000 / limitFPS)));
+        }
+        else if(maxCaptureRate)
+        {
+            // same 4ms-then-0 sequence as the constructor
+            m_session.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan(std::chrono::milliseconds(4)));
+            m_session.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan(0));
+        }
+        else
+        {
+            m_session.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan(std::chrono::milliseconds(15)));
+        }
+    }
+    catch(...)
+    { }
+}
+
 void CaptureSession::UpdateCursor(bool captureCursor)
 {
     if(HasCaptureAPI())

@@ -30,6 +30,8 @@ public:
 
     void UpdateCursor(bool captureCursor);
 
+    void UpdateCaptureRate(bool maxCaptureRate, int limitFPS);
+
     void OnInputFrame();
 
     void ProcessInput();

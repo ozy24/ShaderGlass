@@ -154,6 +154,8 @@ bool CaptureManager::StartSession()
     UpdateOutputFlip();
     UpdateShaderPreset();
     UpdateFrameSkip();
+    UpdateMaxFPS();
+    UpdateVSync();
     UpdateLockedArea();
     UpdateCroppedArea();
     UpdateVertical();
@@ -209,6 +211,7 @@ bool CaptureManager::StartSession()
 
         m_session = make_unique<CaptureSession>(
             m_d3dDevice, captureItem, m_options.captureWindow, m_options.outputWindow, pixelFormat, *m_shaderGlass, m_options.maxCaptureRate, m_frameEvent);
+        UpdateCaptureRate();
     }
 
     m_active = true;
@@ -429,6 +432,31 @@ void CaptureManager::UpdateFrameSkip()
     if(m_shaderGlass)
     {
         m_shaderGlass->SetFrameSkip(m_options.frameSkip);
+    }
+}
+
+void CaptureManager::UpdateMaxFPS()
+{
+    if(m_shaderGlass)
+    {
+        m_shaderGlass->SetMaxFPS(m_options.maxFPS);
+    }
+    UpdateCaptureRate(); // capture limit follows maxFPS when enabled
+}
+
+void CaptureManager::UpdateVSync()
+{
+    if(m_shaderGlass)
+    {
+        m_shaderGlass->SetVSync(m_options.vsync);
+    }
+}
+
+void CaptureManager::UpdateCaptureRate()
+{
+    if(m_session)
+    {
+        m_session->UpdateCaptureRate(m_options.maxCaptureRate, m_options.limitCaptureRate ? m_options.maxFPS : 0);
     }
 }
 

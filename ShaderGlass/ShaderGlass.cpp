@@ -221,6 +221,16 @@ void ShaderGlass::SetFrameSkip(int s)
     m_frameSkip = s;
 }
 
+void ShaderGlass::SetMaxFPS(int fps)
+{
+    m_maxFPS = fps;
+}
+
+void ShaderGlass::SetVSync(bool vsync)
+{
+    m_vsync = vsync;
+}
+
 void ShaderGlass::SetLockedArea(RECT lockedArea)
 {
     m_lockedArea.top    = lockedArea.top;
@@ -401,20 +411,21 @@ void ShaderGlass::DestroyPasses()
 
 void ShaderGlass::PresentFrame()
 {
-    UINT presentFlags = 0;
+    const UINT syncInterval = m_vsync ? 1 : 0;
+    UINT       presentFlags = 0;
     if(m_flipMode)
     {
         DXGI_PRESENT_PARAMETERS presentParameters {};
         presentFlags |= DXGI_PRESENT_RESTART;
-        if(m_allowTearing)
+        if(m_allowTearing && !m_vsync) // tearing flag is only valid with sync interval 0
         {
             presentFlags |= DXGI_PRESENT_ALLOW_TEARING;
         }
-        m_swapChain->Present1(0, presentFlags, &presentParameters);
+        m_swapChain->Present1(syncInterval, presentFlags, &presentParameters);
     }
     else
     {
-        m_swapChain->Present(0, presentFlags);
+        m_swapChain->Present(syncInterval, presentFlags);
     }
     PostMessage(m_outputWindow, WM_PAINT, 0, 0); // necessary for click-through
 }
@@ -424,6 +435,15 @@ void ShaderGlass::Process(winrt::com_ptr<ID3D11Texture2D> texture, ULONGLONG fra
     auto nowTicks            = GetTickCount64();
     auto timeSinceLastRender = nowTicks - m_prevRenderTicks;
     auto logicalFrameNo      = (int)roundf((nowTicks - m_startTicks) / 16.6666666f); // fix shaders at 60 fps
+
+    // Max FPS wall-clock gate (quantized => no drift; independent of input rate)
+    int maxFpsFrameNo = 0;
+    if(m_maxFPS > 0)
+    {
+        maxFpsFrameNo = (int)((nowTicks - m_startTicks) * (ULONGLONG)m_maxFPS / 1000ULL);
+        if(maxFpsFrameNo == m_prevMaxFpsFrameNo)
+            return;
+    }
 
     // same input
     if(inputFrameNo == m_prevInputFrameNo)
@@ -449,6 +469,7 @@ void ShaderGlass::Process(winrt::com_ptr<ID3D11Texture2D> texture, ULONGLONG fra
     m_prevFrameTicks     = frameTicks;
     m_prevInputFrameNo   = inputFrameNo;
     m_prevLogicalFrameNo = logicalFrameNo;
+    m_prevMaxFpsFrameNo  = maxFpsFrameNo;
 
     if(!m_running || !texture)
     {

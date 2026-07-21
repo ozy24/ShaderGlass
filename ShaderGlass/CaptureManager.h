@@ -40,6 +40,9 @@ struct CaptureOptions
     bool         allowTearing {false};
     bool         maxCaptureRate {false};
     bool         useHDR {false};
+    int          maxFPS {0}; // 0 = unlimited
+    bool         vsync {false};
+    bool         limitCaptureRate {false};
     RECT         croppedArea {0, 0, 0, 0};
     bool         vertical {false};
 };
@@ -70,6 +73,9 @@ public:
     void  UpdateOutputFlip();
     void  UpdateShaderPreset();
     void  UpdateFrameSkip();
+    void  UpdateMaxFPS();
+    void  UpdateVSync();
+    void  UpdateCaptureRate();
     bool  UpdateInput();
     void  UpdateCursor();
     void  UpdateLockedArea();
