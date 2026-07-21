@@ -102,7 +102,8 @@ private:
     ULONGLONG  m_prevFrameTicks {0};
     int        m_prevInputFrameNo {0};
     int        m_prevLogicalFrameNo {0};
-    int        m_prevMaxFpsFrameNo {0};
+    long long  m_prevMaxFpsFrameNo {0};
+    long long  m_qpcFrequency {0};
     float      m_fps {0};
     bool       m_requiresFeedback {false};
     int        m_requiresHistory {0};

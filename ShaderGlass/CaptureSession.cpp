@@ -138,6 +138,7 @@ void CaptureSession::OnFrameArrived(winrt::Direct3D11CaptureFramePool const& sen
 {
     auto frame   = sender.TryGetNextFrame();
     m_inputFrame = GetDXGIInterfaceFromObject<ID3D11Texture2D>(frame.Surface());
+    m_frame      = frame; // hold the frame until the next one arrives so the pool can't recycle its buffer while a delayed (fps-capped) render is still reading it
 
     auto contentSize = frame.ContentSize();
     if(contentSize.Width != m_contentSize.Width || contentSize.Height != m_contentSize.Height)
@@ -217,6 +218,7 @@ void CaptureSession::Stop()
         m_captureLib.Stop();
     }
 
+    m_frame     = nullptr;
     m_framePool = nullptr;
     m_session   = nullptr;
     m_item      = nullptr;

@@ -84,6 +84,10 @@ void ShaderGlass::Initialize(HWND                                outputWindow,
     m_startTicks         = GetTickCount64();
     m_prevLogicalFrameNo = 0;
 
+    LARGE_INTEGER qpcFrequency;
+    QueryPerformanceFrequency(&qpcFrequency);
+    m_qpcFrequency = qpcFrequency.QuadPart;
+
     // create swapchain
     {
         winrt::com_ptr<IDXGIFactory2> dxgiFactory;
@@ -437,10 +441,14 @@ void ShaderGlass::Process(winrt::com_ptr<ID3D11Texture2D> texture, ULONGLONG fra
     auto logicalFrameNo      = (int)roundf((nowTicks - m_startTicks) / 16.6666666f); // fix shaders at 60 fps
 
     // Max FPS wall-clock gate (quantized => no drift; independent of input rate)
-    int maxFpsFrameNo = 0;
+    // QPC rather than GetTickCount64: the tick counter's ~15.6ms granularity beats against
+    // the 16.7ms frame slots, producing uneven present pacing (~31ms gaps 4x a second)
+    long long maxFpsFrameNo = 0;
     if(m_maxFPS > 0)
     {
-        maxFpsFrameNo = (int)((nowTicks - m_startTicks) * (ULONGLONG)m_maxFPS / 1000ULL);
+        LARGE_INTEGER qpc;
+        QueryPerformanceCounter(&qpc);
+        maxFpsFrameNo = qpc.QuadPart * m_maxFPS / m_qpcFrequency;
         if(maxFpsFrameNo == m_prevMaxFpsFrameNo)
             return;
     }
