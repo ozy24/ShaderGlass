@@ -1020,6 +1020,8 @@ LRESULT CALLBACK ShaderWindow::WndProcProxy(HWND hWnd, UINT msg, WPARAM wParam, 
     {
         app = (ShaderWindow*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
     }
+    if(!app) // messages arriving before WM_CREATE
+        return DefWindowProc(hWnd, msg, wParam, lParam);
     return app->WndProc(hWnd, msg, wParam, lParam);
 }
 
