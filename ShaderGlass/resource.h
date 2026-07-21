@@ -200,6 +200,16 @@
 #define ID_RENDERER_DIRECT3D11          32939
 #define ID_INPUT_WINDOW32940            32940
 #define ID_OUTPUT_FULLSCREENALLDISPLAYS 32941
+#define ID_PROCESSING_HIDEFROMTASKBAR   32942
+#define IDM_TRAY_SHOWHIDE               32943
+#define ID_FPS_MAXFPS_UNLIMITED         32944
+#define ID_FPS_MAXFPS_60                32945
+#define ID_FPS_MAXFPS_45                32946
+#define ID_FPS_MAXFPS_30                32947
+#define ID_FPS_MAXFPS_20                32948
+#define ID_FPS_MAXFPS_15                32949
+#define ID_FPS_VSYNC                    32950
+#define ID_FPS_LIMITCAPTURERATE         32951
 #define IDC_STATIC                      -1
 #define IDC_STATIC_LABEL                -1
 
@@ -209,7 +219,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        142
-#define _APS_NEXT_COMMAND_VALUE         32942
+#define _APS_NEXT_COMMAND_VALUE         32952
 #define _APS_NEXT_CONTROL_VALUE         1004
 #define _APS_NEXT_SYMED_VALUE           116
 #endif

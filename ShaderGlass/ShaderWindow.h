@@ -45,6 +45,7 @@ private:
     HMENU                         m_aspectRatioMenu {nullptr};
     HMENU                         m_outputScaleMenu {nullptr};
     HMENU                         m_frameSkipMenu {nullptr};
+    HMENU                         m_maxFPSMenu {nullptr};
     HMENU                         m_flipMenu {nullptr};
     HMENU                         m_windowMenu {nullptr};
     HMENU                         m_modeMenu {nullptr};
@@ -89,6 +90,9 @@ private:
     std::filesystem::path         m_importPath;
     volatile bool                 m_forceStart {false};
     bool                          m_firstPaint {true};
+    NOTIFYICONDATA                m_notifyIconData {};
+    bool                          m_trayIconActive {false};
+    UINT                          m_taskbarCreatedMsg {0};
 
     bool         LoadProfile(const std::wstring& fileName, bool forceStart = false);
     void         LoadProfile();
@@ -147,6 +151,13 @@ private:
     void         ForgetStartingPosition();
     bool         GetStartingPositionState();
     void         SaveStartingPositionState(bool state);
+    void         AddTrayIcon();
+    void         RemoveTrayIcon();
+    void         SetHiddenFromTaskbar(bool hidden);
+    void         ShowTrayMenu();
+    void         ToggleWindowVisibility(bool show);
+    bool         GetHideFromTaskbarState();
+    void         SaveHideFromTaskbarState(bool state);
     void         SaveRecentProfiles();
     void         LoadRecentProfiles();
     void         AddRecentProfile(const std::wstring& path);

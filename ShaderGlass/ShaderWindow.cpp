@@ -895,22 +895,22 @@ void ShaderWindow::CropWindow()
 
 void ShaderWindow::BuildProgramMenu()
 {
-    m_frameSkipMenu = GetSubMenu(m_programMenu, 9);
+    m_frameSkipMenu = GetSubMenu(m_programMenu, 10);
     for(const auto& fs : frameSkips)
     {
         AppendMenu(m_frameSkipMenu, MF_STRING, fs.first, fs.second.text);
     }
 
     m_recentMenu = CreatePopupMenu();
-    InsertMenu(m_programMenu, 14, MF_BYPOSITION | MF_STRING | MF_POPUP, (UINT_PTR)m_recentMenu, L"Recent profiles");
+    InsertMenu(m_programMenu, 15, MF_BYPOSITION | MF_STRING | MF_POPUP, (UINT_PTR)m_recentMenu, L"Recent profiles");
     LoadRecentProfiles();
 
     m_hotkeysMenu  = GetSubMenu(m_programMenu, 3);
-    m_gpuMenu      = GetSubMenu(m_programMenu, 7);
-    m_advancedMenu = GetSubMenu(m_programMenu, 10);
+    m_gpuMenu      = GetSubMenu(m_programMenu, 8);
+    m_advancedMenu = GetSubMenu(m_programMenu, 11);
     if(!HasCaptureAPI())
     {
-        EnableMenuItem(m_programMenu, 10, MF_BYPOSITION | MF_DISABLED | MF_GRAYED);
+        EnableMenuItem(m_programMenu, 11, MF_BYPOSITION | MF_DISABLED | MF_GRAYED);
     }
 }
 
@@ -1127,6 +1127,12 @@ BOOL ShaderWindow::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
     m_mainWindow = hWnd;
     m_dpi        = GetDpiForWindow(hWnd);
+    if(GetHideFromTaskbarState())
+    {
+        // apply before first ShowWindow to avoid a taskbar button flash
+        LONG cur_style = GetWindowLong(hWnd, GWL_EXSTYLE);
+        SetWindowLong(hWnd, GWL_EXSTYLE, (cur_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW);
+    }
     ShowWindow(hWnd, nCmdShow);
     UpdateWindow(hWnd);
 
@@ -1143,6 +1149,94 @@ void ShaderWindow::SetTransparent(bool transparent)
         else
             SetWindowLong(m_mainWindow, GWL_EXSTYLE, cur_style & ~WS_EX_TRANSPARENT);
         m_isTransparent = transparent;
+    }
+}
+
+void ShaderWindow::AddTrayIcon()
+{
+    if(m_trayIconActive)
+        return;
+    ZeroMemory(&m_notifyIconData, sizeof(m_notifyIconData));
+    m_notifyIconData.cbSize           = sizeof(NOTIFYICONDATA);
+    m_notifyIconData.hWnd             = m_mainWindow;
+    m_notifyIconData.uID              = 1;
+    m_notifyIconData.uFlags           = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    m_notifyIconData.uCallbackMessage = WM_TRAY_CALLBACK;
+    m_notifyIconData.hIcon =
+        (HICON)LoadImage(m_instance, MAKEINTRESOURCE(IDI_SHADERGLASS), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+    if(!m_notifyIconData.hIcon)
+        m_notifyIconData.hIcon = LoadIcon(m_instance, MAKEINTRESOURCE(IDI_SMALL));
+    wcscpy_s(m_notifyIconData.szTip, L"ShaderGlass");
+    m_trayIconActive = Shell_NotifyIcon(NIM_ADD, &m_notifyIconData);
+}
+
+void ShaderWindow::RemoveTrayIcon()
+{
+    if(!m_trayIconActive)
+        return;
+    Shell_NotifyIcon(NIM_DELETE, &m_notifyIconData);
+    m_trayIconActive = false;
+}
+
+void ShaderWindow::SetHiddenFromTaskbar(bool hidden)
+{
+    // the taskbar only re-evaluates ex-styles across a hide/show cycle
+    bool wasVisible = IsWindowVisible(m_mainWindow);
+    if(wasVisible)
+        ShowWindow(m_mainWindow, SW_HIDE);
+    LONG cur_style = GetWindowLong(m_mainWindow, GWL_EXSTYLE);
+    if(hidden)
+        cur_style = (cur_style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
+    else
+        cur_style = cur_style & ~WS_EX_TOOLWINDOW;
+    SetWindowLong(m_mainWindow, GWL_EXSTYLE, cur_style);
+    if(wasVisible)
+        ShowWindow(m_mainWindow, SW_SHOW);
+
+    if(hidden)
+        AddTrayIcon();
+    else
+        RemoveTrayIcon();
+}
+
+void ShaderWindow::ShowTrayMenu()
+{
+    POINT pt;
+    GetCursorPos(&pt);
+    HMENU menu = CreatePopupMenu();
+    AppendMenu(menu, MF_STRING, IDM_TRAY_SHOWHIDE, IsWindowVisible(m_mainWindow) ? L"Hide Window" : L"Show Window");
+    AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenu(menu, MF_STRING, IDM_EXIT, L"Exit");
+    SetForegroundWindow(m_mainWindow); // required so the menu dismisses on outside click
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, m_mainWindow, nullptr);
+    PostMessage(m_mainWindow, WM_NULL, 0, 0);
+    DestroyMenu(menu);
+}
+
+void ShaderWindow::ToggleWindowVisibility(bool show)
+{
+    if(show)
+    {
+        ShowWindow(m_mainWindow, IsIconic(m_mainWindow) ? SW_RESTORE : SW_SHOW);
+        SetForegroundWindow(m_mainWindow);
+        if(m_captureOptions.paused)
+        {
+            if(m_captureManager.StartSession())
+            {
+                UpdateGPUName();
+                m_captureOptions.paused = false;
+            }
+        }
+    }
+    else
+    {
+        // pause capture while hidden, same as minimize
+        if(m_captureManager.IsActive() && !(m_captureOptions.captureWindow && !HasCaptureAPI() && HasCaptureLib()))
+        {
+            m_captureOptions.paused = true;
+            m_captureManager.StopSession();
+        }
+        ShowWindow(m_mainWindow, SW_HIDE);
     }
 }
 
@@ -1370,8 +1464,27 @@ void ShaderWindow::UpdateTitle()
 
 LRESULT CALLBACK ShaderWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    if(message == m_taskbarCreatedMsg && m_taskbarCreatedMsg != 0 && GetHideFromTaskbarState())
+    {
+        // explorer restarted, the old tray icon died with it
+        m_trayIconActive = false;
+        AddTrayIcon();
+        return 0;
+    }
     switch(message)
     {
+    case WM_TRAY_CALLBACK:
+        switch(LOWORD(lParam))
+        {
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+            ToggleWindowVisibility(!IsWindowVisible(m_mainWindow) || IsIconic(m_mainWindow));
+            break;
+        case WM_RBUTTONUP:
+            ShowTrayMenu();
+            break;
+        }
+        return 0;
     case WM_COMMAND: {
         UINT wmId = LOWORD(wParam);
         switch(wmId)
@@ -1485,6 +1598,23 @@ LRESULT CALLBACK ShaderWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, L
                 SaveStartingPositionState(true);
                 CheckMenuItem(m_programMenu, ID_PROCESSING_REMEMBERPOSITION, MF_CHECKED);
             }
+            break;
+        case ID_PROCESSING_HIDEFROMTASKBAR:
+            if(GetMenuState(m_programMenu, ID_PROCESSING_HIDEFROMTASKBAR, MF_BYCOMMAND) & MF_CHECKED)
+            {
+                CheckMenuItem(m_programMenu, ID_PROCESSING_HIDEFROMTASKBAR, MF_UNCHECKED);
+                SaveHideFromTaskbarState(false);
+                SetHiddenFromTaskbar(false);
+            }
+            else
+            {
+                CheckMenuItem(m_programMenu, ID_PROCESSING_HIDEFROMTASKBAR, MF_CHECKED);
+                SaveHideFromTaskbarState(true);
+                SetHiddenFromTaskbar(true);
+            }
+            break;
+        case IDM_TRAY_SHOWHIDE:
+            ToggleWindowVisibility(!IsWindowVisible(m_mainWindow));
             break;
         case ID_PRESENTATION_USEFLIPMODE:
             if(GetMenuState(m_advancedMenu, ID_PRESENTATION_USEFLIPMODE, MF_BYCOMMAND) & MF_CHECKED)
@@ -2269,6 +2399,7 @@ LRESULT CALLBACK ShaderWindow::WndProc(HWND hWnd, UINT message, WPARAM wParam, L
         }
         break;
     case WM_DESTROY:
+        RemoveTrayIcon();
         m_captureManager.Exit();
         SaveStartingPosition();
         PostQuitMessage(0);
@@ -2516,6 +2647,12 @@ bool ShaderWindow::Create(_In_ HINSTANCE hInstance, _In_ int nCmdShow)
     {
         CheckMenuItem(m_programMenu, ID_PROCESSING_REMEMBERPOSITION, MF_BYCOMMAND | MF_CHECKED);
     }
+    m_taskbarCreatedMsg = RegisterWindowMessage(L"TaskbarCreated");
+    if(GetHideFromTaskbarState())
+    {
+        CheckMenuItem(m_programMenu, ID_PROCESSING_HIDEFROMTASKBAR, MF_BYCOMMAND | MF_CHECKED);
+        AddTrayIcon();
+    }
     if(GetFullscreenAllDisplaysState())
     {
         CheckMenuItem(m_outputMenu, ID_OUTPUT_FULLSCREENALLDISPLAYS, MF_BYCOMMAND | MF_CHECKED);
@@ -2707,6 +2844,16 @@ void ShaderWindow::SaveFullscreenAllDisplaysState(bool state)
 bool ShaderWindow::GetFullscreenAllDisplaysState()
 {
     return GetRegistryOption(TEXT("Fullscreen All Displays"), false);
+}
+
+void ShaderWindow::SaveHideFromTaskbarState(bool state)
+{
+    SaveRegistryOption(TEXT("Hide From Taskbar"), state);
+}
+
+bool ShaderWindow::GetHideFromTaskbarState()
+{
+    return GetRegistryOption(TEXT("Hide From Taskbar"), true);
 }
 
 void ShaderWindow::SaveRememberFPS(int fps)

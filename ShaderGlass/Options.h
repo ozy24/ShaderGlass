@@ -32,6 +32,8 @@ GNU General Public License v3.0
 #define WM_USER_CROP_UPDATED (WM_USER + 5000)
 #define WM_USER_FIRST_FRAME (WM_USER + 5001)
 
+#define WM_TRAY_CALLBACK (WM_APP + 1)
+
 #define CUSTOM_MNEMONIC "Custom"
 
 struct PixelSizeInfo
